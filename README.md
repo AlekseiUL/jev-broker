@@ -22,9 +22,11 @@
 
 ## Быстрый старт на чистой машине
 
-Скачайте этот репозиторий и откройте терминал в его корне. Укажите **свои** имена профилей Hermes; здесь `assistant` и `research` — примеры.
+Скопируйте репозиторий и перейдите в его папку (нужен установленный Git). Укажите **свои** имена профилей Hermes; здесь `assistant` и `research` — примеры.
 
 ```bash
+git clone https://github.com/AlekseiUL/jev-broker.git
+cd jev-broker
 go test ./...
 python3 -B -m unittest discover -s scripts -p 'test_*.py'
 go build -o bin/jev-broker ./cmd/jev-broker
@@ -46,15 +48,15 @@ python3 scripts/run.py
 
 Для **каждого** разрешённого профиля повторите два шага. Не копируйте токен одного профиля другому.
 
-1. Определите активный `.env` этого профиля. Для одиночного стандартного Hermes это обычно `~/.hermes/.env`; в многопрофильной установке используйте именно секретный файл нужного профиля. Положите туда токен скрыто, без вывода в терминал, например:
+1. Определите активный `.env` **именно этого** профиля командой `hermes --profile assistant config env-path`. У стандартного именованного профиля `assistant` это `~/.hermes/profiles/assistant/.env`, а у профиля по умолчанию — `~/.hermes/.env`; если команда показывает иной путь, используйте **его**. Положите туда токен скрыто, без вывода его значения в терминал. Пример для именованного `assistant`:
 
    ```bash
-   python3 scripts/install_profile_env.py --profile assistant --env-file "$HOME/.hermes/.env"
+   python3 scripts/install_profile_env.py --profile assistant --env-file "$HOME/.hermes/profiles/assistant/.env"
    ```
 
-   Для другого профиля замените `assistant` и путь к его `.env`. Скрипт сохраняет приватную резервную копию существующего файла, не переписывает чужие переменные и откажется менять уже существующий токен с тем же именем. Исходный фрагмент остаётся в приватной папке Broker.
+   Для другого профиля замените `assistant` и путь к его `.env`; перед запуском сверьте путь с выводом `hermes --profile ИМЯ config env-path`. Скрипт сохраняет приватную резервную копию существующего файла, не переписывает чужие переменные и откажется менять уже существующий токен с тем же именем. Исходный фрагмент остаётся в приватной папке Broker.
 
-2. Откройте **активный** `config.yaml` того же профиля и добавьте блок `jev_broker` из приватного `mcp-assistant.yaml`. Если `mcp_servers:` уже есть, добавляйте только вложенный `jev_broker`, не создавайте второй верхнеуровневый ключ. Пример без секрета:
+2. Узнайте путь к `config.yaml` того же профиля через `hermes --profile assistant config path` и добавьте блок `jev_broker` из приватного `mcp-assistant.yaml`. Если `mcp_servers:` уже есть, добавляйте только вложенный `jev_broker`, не создавайте второй верхнеуровневый ключ. Пример без секрета:
 
    ```yaml
    mcp_servers:
@@ -91,7 +93,7 @@ cp skills/jev-broker/SKILL.md "$HOME/.hermes/profiles/assistant/skills/jev-broke
 - [Установка, проверка, откат](docs/install-and-verify.md) — точные признаки успеха, ошибки подключения, обновление профилей и восстановление.
 - [Чеклист публикации](docs/release-checklist.md) — что можно выкладывать на GitHub и как проверить отсутствие секретов.
 
-JEV — вероятностный помощник для небольших решений, не источник фактов и не разрешение на действие. Экономия контекста возникает только если отбор сделан **до** чтения агентом всех полных текстов. Отправляйте собственные или разрешённые к обработке данные; никогда не отправляйте ключи, пароли и файлы сессий.
+JEV — вероятностный помощник для небольших решений, не источник фактов и не разрешение на действие. Экономия контекста возможна только если отбор сделан **до** чтения агентом всех полных текстов; прирост качества ответов и экономия токенов тестами этого репозитория **не измерены**. Отправляйте собственные или разрешённые к обработке данные; никогда не отправляйте ключи, пароли и файлы сессий.
 
 ## Лицензия и использованные компоненты
 
@@ -103,7 +105,7 @@ JEV — вероятностный помощник для небольших р
 
 JEV Broker is a **local HTTP MCP tool** for agents using Hermes. The agent collects its own evidence, defines named `questions` and chooses `noul` (yes/no), `choice` (options) or `score` (an ordered rubric). It may mix modes in one `evaluate` call. The broker validates input, logs attempt metadata, calls TypeSafe JEV through OpenRouter and returns structured judgments. The agent must then check the original evidence and make its own decision.
 
-This is a **standalone public version of the workflow**, not a copy of a live multi-agent installation. It includes no real profiles, messages, tokens or access rights. It does not read Telegram, search databases, post messages or automatically save agent context. Reading all source texts into the agent first and then sending them to JEV does **not** recover those already spent context tokens.
+This is a **standalone public version of the workflow**, not a copy of a live multi-agent installation. It includes no real profiles, messages, tokens or access rights. It does not read Telegram, search databases, post messages or automatically save agent context. Reading all source texts into the agent first and then sending them to JEV does **not** recover those already spent context tokens. This repository's tests do **not** measure answer-quality gains or token savings.
 
 ### Requirements and costs
 
@@ -114,9 +116,11 @@ This is a **standalone public version of the workflow**, not a copy of a live mu
 
 ### Install and verify without a paid request
 
-From the repository root, run:
+Clone the repository (Git is required), then run these commands from its root:
 
 ```bash
+git clone https://github.com/AlekseiUL/jev-broker.git
+cd jev-broker
 go test ./...
 python3 -B -m unittest discover -s scripts -p 'test_*.py'
 go build -o bin/jev-broker ./cmd/jev-broker
@@ -126,13 +130,13 @@ python3 scripts/run.py --check
 
 `setup.py` prompts for the key **without displaying it** and creates private files under `~/.config/jev-broker` by default. Replace `assistant` with your own profile ID; repeat `--profile` for every permitted profile **during the first setup**. An existing private directory is not overwritten. The tests use mocks and do not call the paid model; the initial Go dependency download may require internet.
 
-Run `python3 scripts/run.py` in a separate terminal to keep the local broker running. The API key stays with the broker; each permitted agent receives its **own** revocable bearer. To add a profile, install the generated token into **that profile's actual** `.env` file without printing it:
+Run `python3 scripts/run.py` in a separate terminal and **keep it running while agents use JEV**. This package does not set up automatic startup; configure your own process manager if you need the broker after a reboot. The API key stays with the broker; each permitted agent receives its **own** revocable bearer. Find the named profile's actual path with `hermes --profile assistant config env-path`. For a standard named `assistant` profile it is `~/.hermes/profiles/assistant/.env` (not the default profile's `~/.hermes/.env`). Install its generated token there without printing the value:
 
 ```bash
-python3 scripts/install_profile_env.py --profile assistant --env-file "$HOME/.hermes/.env"
+python3 scripts/install_profile_env.py --profile assistant --env-file "$HOME/.hermes/profiles/assistant/.env"
 ```
 
-Then add the generated `mcp-assistant.yaml` snippet to **that profile's actual** `config.yaml`, merging under a single `mcp_servers:` key. The snippet contains only `${JEV_BROKER_TOKEN_ASSISTANT}`, not its value. Back up the config before editing. The example paths above fit a simple Hermes install; named profiles may use different active paths. Do not auto-install this into every profile.
+If the CLI shows a different `.env` path, use that path instead. For another profile, replace the profile ID and check its path first. Then locate the same profile's `config.yaml` with `hermes --profile assistant config path` and add the generated `mcp-assistant.yaml` snippet, merging under a single `mcp_servers:` key. The snippet contains only `${JEV_BROKER_TOKEN_ASSISTANT}`, not its value. Back up the config before editing. Do not auto-install this into every profile.
 
 Reload that profile's MCP connection (or start a new session) and verify its **actual** tool list shows `mcp__jev_broker__evaluate` with `state`, `items`, `questions`. The prefix depends on the MCP server name. A successful `tools/list` does not call OpenRouter. The [agent skill](skills/jev-broker/SKILL.md) teaches when to use the tool but **does not** grant access by itself. Only after checking access and data rights should you separately authorize a synthetic paid test. See the [installation and rollback guide](docs/install-and-verify.md) and [agent guide](AGENT_GUIDE.md).
 
