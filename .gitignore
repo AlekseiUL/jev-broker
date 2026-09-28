@@ -1,0 +1,23 @@
+# Public source allowlist. Everything else (especially local credentials,
+# tokens, audit files, binaries and test caches) stays out of Git by default.
+*
+!/.gitignore
+!/AGENT_GUIDE.md
+!/LICENSE
+!/NOTICE
+!/README.md
+!/go.mod
+!/go.sum
+!/cmd/
+!/cmd/jev-broker/
+!/cmd/jev-broker/*.go
+!/internal/
+!/internal/broker/
+!/internal/broker/*.go
+!/docs/
+!/docs/*.md
+!/scripts/
+!/scripts/*.py
+!/skills/
+!/skills/jev-broker/
+!/skills/jev-broker/SKILL.md

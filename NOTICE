@@ -1,0 +1,8 @@
+JEV Broker is a standalone subscriber-facing adaptation of the MIT-licensed
+system-one-connector by Mostafa:
+https://github.com/itsmostafa/system-one-connector
+
+This package adds a local HTTP MCP Broker, per-profile bearer authentication,
+agent-defined noul/choice/score requests, and subscriber setup guidance.
+The original MIT license is retained in LICENSE. This notice is not an
+endorsement by the original project or by OpenRouter or TypeSafe.
