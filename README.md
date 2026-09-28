@@ -1,6 +1,55 @@
-# JEV Broker — инструмент для агентов / JEV tool for agents
+# JEV Broker — tool for agents / инструмент для агентов
 
-[Русский](#русский) · [English](#english) · [Мои ссылки / My links](#links)
+[English](#english) · [Русский](#русский) · [My links / Мои ссылки](#links)
+
+## English
+
+JEV Broker is a **local HTTP MCP tool** for agents using Hermes. The agent collects its own evidence, defines named `questions` and chooses `noul` (yes/no), `choice` (options) or `score` (an ordered rubric). It may mix modes in one `evaluate` call. The broker validates input, logs attempt metadata, calls TypeSafe JEV through OpenRouter and returns structured judgments. The agent must then check the original evidence and make its own decision.
+
+This is a **standalone public version of the workflow**, not a copy of a live multi-agent installation. It includes no real profiles, messages, tokens or access rights. It does not read Telegram, search databases, post messages or automatically save agent context. Reading all source texts into the agent first and then sending them to JEV does **not** recover those already spent context tokens. This repository's tests do **not** measure answer-quality gains or token savings.
+
+### Requirements and costs
+
+- macOS or Linux; Go 1.25+, Python 3.9+, and Hermes with HTTP MCP support. Windows is not supported by this release.
+- Your **own** OpenRouter account and normal API key. The model call is paid; setup, local tests and MCP `tools/list` are not. There is no built-in daily spending cap.
+- Run the broker on the same machine as your trusted Hermes profiles. The launcher binds only to `127.0.0.1`. It does not install a background service or configure remote TLS.
+- Without `items`, one `evaluate` call makes one paid provider request. With `items`, **each item makes its own sequential paid request** using the same questions. Provider requests are not retried automatically. A timeout or partial response does not prove that no charge occurred.
+
+### Install and verify without a paid request
+
+Clone the repository (Git is required), then run these commands from its root:
+
+```bash
+git clone https://github.com/AlekseiUL/jev-broker.git
+cd jev-broker
+go test ./...
+python3 -B -m unittest discover -s scripts -p 'test_*.py'
+go build -o bin/jev-broker ./cmd/jev-broker
+python3 scripts/setup.py --profile assistant
+python3 scripts/run.py --check
+```
+
+`setup.py` prompts for the key **without displaying it** and creates private files under `~/.config/jev-broker` by default. Replace `assistant` with your own profile ID; repeat `--profile` for every permitted profile **during the first setup**. An existing private directory is not overwritten. The tests use mocks and do not call the paid model; the initial Go dependency download may require internet.
+
+Run `python3 scripts/run.py` in a separate terminal and **keep it running while agents use JEV**. This package does not set up automatic startup; configure your own process manager if you need the broker after a reboot. The API key stays with the broker; each permitted agent receives its **own** revocable bearer. Find the named profile's actual path with `hermes --profile assistant config env-path`. For a standard named `assistant` profile it is `~/.hermes/profiles/assistant/.env` (not the default profile's `~/.hermes/.env`). Install its generated token there without printing the value:
+
+```bash
+python3 scripts/install_profile_env.py --profile assistant --env-file "$HOME/.hermes/profiles/assistant/.env"
+```
+
+If the CLI shows a different `.env` path, use that path instead. For another profile, replace the profile ID and check its path first. Then locate the same profile's `config.yaml` with `hermes --profile assistant config path` and add the generated `mcp-assistant.yaml` snippet, merging under a single `mcp_servers:` key. The snippet contains only `${JEV_BROKER_TOKEN_ASSISTANT}`, not its value. Back up the config before editing. Do not auto-install this into every profile.
+
+Reload that profile's MCP connection (or start a new session) and verify its **actual** tool list shows `mcp__jev_broker__evaluate` with `state`, `items`, `questions`. The prefix depends on the MCP server name. A successful `tools/list` does not call OpenRouter. The [agent skill](skills/jev-broker/SKILL.md) teaches when to use the tool but **does not** grant access by itself. Only after checking access and data rights should you separately authorize a synthetic paid test. See the [installation and rollback guide](docs/install-and-verify.md) and [agent guide](AGENT_GUIDE.md).
+
+### Security and limitations
+
+Do not put the OpenRouter key in chats, commands, Git or Hermes profile YAML. Never send credentials, session files or other people's private material to JEV without the necessary rights. The broker's credential check is **best-effort**, not a guarantee. File permissions (`0700/0600`) isolate files from other OS users, **not** from agents with shell/file access under the same OS account. Untrusted profiles require separate OS users or machines with an independently secured connection.
+
+The broker does not impose a monetary budget or decide which data is safe to share. A JEV probability is not a fact, permission or approval to publish. If a call fails or the outcome is unknown, check the source and **do not blindly retry** a potentially paid request. To disconnect one profile, remove its MCP config and environment variable; this alone does not revoke a stolen bearer. Follow the [revocation instructions](docs/install-and-verify.md#отзыв-доступа-конкретного-профиля). Before another release, use the [release checklist](docs/release-checklist.md).
+
+### Credits and disclosure
+
+This adapts the MIT-licensed [System One Connector](https://github.com/itsmostafa/system-one-connector); see [NOTICE](NOTICE) and [LICENSE](LICENSE). It uses the [Go MCP SDK](https://github.com/modelcontextprotocol/go-sdk), connects to [Hermes Agent](https://hermes-agent.nousresearch.com/docs/) and calls TypeSafe JEV via the [OpenRouter Decisions API](https://openrouter.ai/docs/guides/community/jev-tutorial). You provide and pay for your own OpenRouter access. No affiliation with, or endorsement by, those projects is implied. AI-assisted tooling was used during development and editing. Follow the rules of each data source and the rights of the people whose material you process; a technical integration does not waive them.
 
 ## Русский
 
@@ -101,61 +150,12 @@ JEV — вероятностный помощник для небольших р
 
 Разработка и редактура проходили с помощью AI-ассистента. Тесты и проверка публичных файлов не означают гарантию качества ответов JEV или разрешение передавать чужие данные. Правила источника данных и права людей сохраняются независимо от способа подключения модели.
 
-## English
-
-JEV Broker is a **local HTTP MCP tool** for agents using Hermes. The agent collects its own evidence, defines named `questions` and chooses `noul` (yes/no), `choice` (options) or `score` (an ordered rubric). It may mix modes in one `evaluate` call. The broker validates input, logs attempt metadata, calls TypeSafe JEV through OpenRouter and returns structured judgments. The agent must then check the original evidence and make its own decision.
-
-This is a **standalone public version of the workflow**, not a copy of a live multi-agent installation. It includes no real profiles, messages, tokens or access rights. It does not read Telegram, search databases, post messages or automatically save agent context. Reading all source texts into the agent first and then sending them to JEV does **not** recover those already spent context tokens. This repository's tests do **not** measure answer-quality gains or token savings.
-
-### Requirements and costs
-
-- macOS or Linux; Go 1.25+, Python 3.9+, and Hermes with HTTP MCP support. Windows is not supported by this release.
-- Your **own** OpenRouter account and normal API key. The model call is paid; setup, local tests and MCP `tools/list` are not. There is no built-in daily spending cap.
-- Run the broker on the same machine as your trusted Hermes profiles. The launcher binds only to `127.0.0.1`. It does not install a background service or configure remote TLS.
-- Without `items`, one `evaluate` call makes one paid provider request. With `items`, **each item makes its own sequential paid request** using the same questions. Provider requests are not retried automatically. A timeout or partial response does not prove that no charge occurred.
-
-### Install and verify without a paid request
-
-Clone the repository (Git is required), then run these commands from its root:
-
-```bash
-git clone https://github.com/AlekseiUL/jev-broker.git
-cd jev-broker
-go test ./...
-python3 -B -m unittest discover -s scripts -p 'test_*.py'
-go build -o bin/jev-broker ./cmd/jev-broker
-python3 scripts/setup.py --profile assistant
-python3 scripts/run.py --check
-```
-
-`setup.py` prompts for the key **without displaying it** and creates private files under `~/.config/jev-broker` by default. Replace `assistant` with your own profile ID; repeat `--profile` for every permitted profile **during the first setup**. An existing private directory is not overwritten. The tests use mocks and do not call the paid model; the initial Go dependency download may require internet.
-
-Run `python3 scripts/run.py` in a separate terminal and **keep it running while agents use JEV**. This package does not set up automatic startup; configure your own process manager if you need the broker after a reboot. The API key stays with the broker; each permitted agent receives its **own** revocable bearer. Find the named profile's actual path with `hermes --profile assistant config env-path`. For a standard named `assistant` profile it is `~/.hermes/profiles/assistant/.env` (not the default profile's `~/.hermes/.env`). Install its generated token there without printing the value:
-
-```bash
-python3 scripts/install_profile_env.py --profile assistant --env-file "$HOME/.hermes/profiles/assistant/.env"
-```
-
-If the CLI shows a different `.env` path, use that path instead. For another profile, replace the profile ID and check its path first. Then locate the same profile's `config.yaml` with `hermes --profile assistant config path` and add the generated `mcp-assistant.yaml` snippet, merging under a single `mcp_servers:` key. The snippet contains only `${JEV_BROKER_TOKEN_ASSISTANT}`, not its value. Back up the config before editing. Do not auto-install this into every profile.
-
-Reload that profile's MCP connection (or start a new session) and verify its **actual** tool list shows `mcp__jev_broker__evaluate` with `state`, `items`, `questions`. The prefix depends on the MCP server name. A successful `tools/list` does not call OpenRouter. The [agent skill](skills/jev-broker/SKILL.md) teaches when to use the tool but **does not** grant access by itself. Only after checking access and data rights should you separately authorize a synthetic paid test. See the [installation and rollback guide](docs/install-and-verify.md) and [agent guide](AGENT_GUIDE.md).
-
-### Security and limitations
-
-Do not put the OpenRouter key in chats, commands, Git or Hermes profile YAML. Never send credentials, session files or other people's private material to JEV without the necessary rights. The broker's credential check is **best-effort**, not a guarantee. File permissions (`0700/0600`) isolate files from other OS users, **not** from agents with shell/file access under the same OS account. Untrusted profiles require separate OS users or machines with an independently secured connection.
-
-The broker does not impose a monetary budget or decide which data is safe to share. A JEV probability is not a fact, permission or approval to publish. If a call fails or the outcome is unknown, check the source and **do not blindly retry** a potentially paid request. To disconnect one profile, remove its MCP config and environment variable; this alone does not revoke a stolen bearer. Follow the [revocation instructions](docs/install-and-verify.md#отзыв-доступа-конкретного-профиля). Before another release, use the [release checklist](docs/release-checklist.md).
-
-### Credits and disclosure
-
-This adapts the MIT-licensed [System One Connector](https://github.com/itsmostafa/system-one-connector); see [NOTICE](NOTICE) and [LICENSE](LICENSE). It uses the [Go MCP SDK](https://github.com/modelcontextprotocol/go-sdk), connects to [Hermes Agent](https://hermes-agent.nousresearch.com/docs/) and calls TypeSafe JEV via the [OpenRouter Decisions API](https://openrouter.ai/docs/guides/community/jev-tutorial). You provide and pay for your own OpenRouter access. No affiliation with, or endorsement by, those projects is implied. AI-assisted tooling was used during development and editing. Follow the rules of each data source and the rights of the people whose material you process; a technical integration does not waive them.
-
 ## Links
 
-Мои ссылки / My links:
+My links / Мои ссылки:
 
-- [GitHub — другие открытые проекты / other open-source projects](https://github.com/AlekseiUL)
-- [YouTube — видео об агентах и инструментах / videos about agents and tools](https://youtube.com/@alekseiulianov)
-- [Telegram SPRUT_AI — публичные заметки / public notes](https://t.me/Sprut_AI)
-- [Telegram-чат — обсуждение / discussion](https://t.me/+eH-qNIDmud8zNDZi)
-- [AI ОПЕРАЦИОНКА — платные проекты и разборы / paid projects and guides](https://t.me/tribute/app?startapp=sJyg)
+- [GitHub — other open-source projects / другие открытые проекты](https://github.com/AlekseiUL)
+- [YouTube — videos about agents and tools / видео об агентах и инструментах](https://youtube.com/@alekseiulianov)
+- [Telegram SPRUT_AI — public notes / публичные заметки](https://t.me/Sprut_AI)
+- [Telegram-чат — discussion / обсуждение](https://t.me/+eH-qNIDmud8zNDZi)
+- [AI ОПЕРАЦИОНКА — paid projects and guides / платные проекты и разборы](https://t.me/tribute/app?startapp=sJyg)
