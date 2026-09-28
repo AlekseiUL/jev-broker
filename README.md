@@ -1,8 +1,14 @@
-# JEV Broker для Hermes
+# JEV Broker — инструмент для агентов / JEV tool for agents
+
+[Русский](#русский) · [English](#english) · [Мои ссылки / My links](#links)
+
+## Русский
 
 Один локальный MCP-инструмент `evaluate`: агент сам выбирает материал, вопросы и режимы JEV (`noul`, `choice`, `score`). В MCP-конфигурацию агентов ключ OpenRouter не попадает; каждому профилю Hermes выдаётся свой отзывной токен. Java не нужна: сервер написан на Go, вспомогательная установка — на Python.
 
-Это пакет для самостоятельной установки, а не доступ к чужому аккаунту или к серверу автора. JEV оценивает переданные данные, но сам не читает Telegram, файлы или базы и не отправляет сообщения.
+**Зачем он нужен:** агент получает материал своим обычным способом, формулирует конкретный вопрос и передаёт его Broker. Broker проверяет запрос, записывает метаданные попытки, отправляет его в модель JEV через OpenRouter и возвращает короткую оценку. Агент сверяет её с исходным материалом и сам решает, что делать дальше. Режимы можно смешивать в одном вызове; каждый `items`-элемент — отдельный платный запрос. Без `items` один вызов — один платный запрос. Автоматических повторов и встроенного денежного лимита нет.
+
+Это переносимый публичный вариант **подхода** с общим инструментом для агентов, а не экспорт работающей внутренней установки. В нём нет действующих профилей, переписок, токенов или прав доступа. JEV оценивает только то, что агент явно передал: сам не читает Telegram, файлы или базы и не отправляет сообщения. Скачивание пакета не подключает его к серверу автора или к чужому аккаунту OpenRouter.
 
 ## Что понадобится
 
@@ -77,7 +83,7 @@ cp skills/jev-broker/SKILL.md "$HOME/.hermes/profiles/assistant/skills/jev-broke
 
 Для профиля по умолчанию используйте `~/.hermes/skills/jev-broker/`; для остальных замените `assistant` на их имя. Если файл уже есть, сначала изучите и сохраните его — не перезаписывайте вслепую. Начните новый сеанс и проверьте отдельно: скилл появился в `/skills`, а MCP-инструмент — в фактическом списке инструментов. Одно **не** доказывает другое. [Hermes загружает скиллы по мере надобности](https://hermes-agent.nousresearch.com/docs/guides/work-with-skills), поэтому полная инструкция не засоряет каждый запрос.
 
-После публикации самостоятельного GitHub-репозитория с этим пакетом скилл можно будет ставить по прямому HTTPS-адресу файла `SKILL.md`, например `hermes skills install https://raw.githubusercontent.com/<owner>/<repo>/main/skills/jev-broker/SKILL.md`. Подставляйте только проверенный адрес опубликованного репозитория и запускайте установку в нужном профиле; это не команда для текущей локальной папки.
+В опубликованном репозитории скилл можно установить по прямому адресу: `hermes skills install https://raw.githubusercontent.com/AlekseiUL/jev-broker/main/skills/jev-broker/SKILL.md`. Делайте это только для выбранного профиля Hermes после проверки адреса и содержимого скилла; сама установка скилла не подключает MCP и не даёт доступ к JEV.
 
 ## Агенту и владельцу
 
@@ -87,6 +93,65 @@ cp skills/jev-broker/SKILL.md "$HOME/.hermes/profiles/assistant/skills/jev-broke
 
 JEV — вероятностный помощник для небольших решений, не источник фактов и не разрешение на действие. Экономия контекста возникает только если отбор сделан **до** чтения агентом всех полных текстов. Отправляйте собственные или разрешённые к обработке данные; никогда не отправляйте ключи, пароли и файлы сессий.
 
-## Лицензия
+## Лицензия и использованные компоненты
 
-MIT; сведения об исходном проекте и изменениях — в [NOTICE](NOTICE).
+[System One Connector](https://github.com/itsmostafa/system-one-connector) — исходный MIT-лицензированный проект; автор и исходная лицензия указаны в [NOTICE](NOTICE) и [LICENSE](LICENSE). В этой версии используется [Go MCP SDK](https://github.com/modelcontextprotocol/go-sdk) для локального HTTP MCP, [Hermes Agent](https://hermes-agent.nousresearch.com/docs/) как клиент и модель TypeSafe JEV через [OpenRouter Decisions API](https://openrouter.ai/docs/guides/community/jev-tutorial). Для работы нужен **ваш** аккаунт и ключ OpenRouter; вызовы модели платные. Это независимый пакет, а не официальный продукт или рекомендация со стороны упомянутых проектов.
+
+Разработка и редактура проходили с помощью AI-ассистента. Тесты и проверка публичных файлов не означают гарантию качества ответов JEV или разрешение передавать чужие данные. Правила источника данных и права людей сохраняются независимо от способа подключения модели.
+
+## English
+
+JEV Broker is a **local HTTP MCP tool** for agents using Hermes. The agent collects its own evidence, defines named `questions` and chooses `noul` (yes/no), `choice` (options) or `score` (an ordered rubric). It may mix modes in one `evaluate` call. The broker validates input, logs attempt metadata, calls TypeSafe JEV through OpenRouter and returns structured judgments. The agent must then check the original evidence and make its own decision.
+
+This is a **standalone public version of the workflow**, not a copy of a live multi-agent installation. It includes no real profiles, messages, tokens or access rights. It does not read Telegram, search databases, post messages or automatically save agent context. Reading all source texts into the agent first and then sending them to JEV does **not** recover those already spent context tokens.
+
+### Requirements and costs
+
+- macOS or Linux; Go 1.25+, Python 3.9+, and Hermes with HTTP MCP support. Windows is not supported by this release.
+- Your **own** OpenRouter account and normal API key. The model call is paid; setup, local tests and MCP `tools/list` are not. There is no built-in daily spending cap.
+- Run the broker on the same machine as your trusted Hermes profiles. The launcher binds only to `127.0.0.1`. It does not install a background service or configure remote TLS.
+- Without `items`, one `evaluate` call makes one paid provider request. With `items`, **each item makes its own sequential paid request** using the same questions. Provider requests are not retried automatically. A timeout or partial response does not prove that no charge occurred.
+
+### Install and verify without a paid request
+
+From the repository root, run:
+
+```bash
+go test ./...
+python3 -B -m unittest discover -s scripts -p 'test_*.py'
+go build -o bin/jev-broker ./cmd/jev-broker
+python3 scripts/setup.py --profile assistant
+python3 scripts/run.py --check
+```
+
+`setup.py` prompts for the key **without displaying it** and creates private files under `~/.config/jev-broker` by default. Replace `assistant` with your own profile ID; repeat `--profile` for every permitted profile **during the first setup**. An existing private directory is not overwritten. The tests use mocks and do not call the paid model; the initial Go dependency download may require internet.
+
+Run `python3 scripts/run.py` in a separate terminal to keep the local broker running. The API key stays with the broker; each permitted agent receives its **own** revocable bearer. To add a profile, install the generated token into **that profile's actual** `.env` file without printing it:
+
+```bash
+python3 scripts/install_profile_env.py --profile assistant --env-file "$HOME/.hermes/.env"
+```
+
+Then add the generated `mcp-assistant.yaml` snippet to **that profile's actual** `config.yaml`, merging under a single `mcp_servers:` key. The snippet contains only `${JEV_BROKER_TOKEN_ASSISTANT}`, not its value. Back up the config before editing. The example paths above fit a simple Hermes install; named profiles may use different active paths. Do not auto-install this into every profile.
+
+Reload that profile's MCP connection (or start a new session) and verify its **actual** tool list shows `mcp__jev_broker__evaluate` with `state`, `items`, `questions`. The prefix depends on the MCP server name. A successful `tools/list` does not call OpenRouter. The [agent skill](skills/jev-broker/SKILL.md) teaches when to use the tool but **does not** grant access by itself. Only after checking access and data rights should you separately authorize a synthetic paid test. See the [installation and rollback guide](docs/install-and-verify.md) and [agent guide](AGENT_GUIDE.md).
+
+### Security and limitations
+
+Do not put the OpenRouter key in chats, commands, Git or Hermes profile YAML. Never send credentials, session files or other people's private material to JEV without the necessary rights. The broker's credential check is **best-effort**, not a guarantee. File permissions (`0700/0600`) isolate files from other OS users, **not** from agents with shell/file access under the same OS account. Untrusted profiles require separate OS users or machines with an independently secured connection.
+
+The broker does not impose a monetary budget or decide which data is safe to share. A JEV probability is not a fact, permission or approval to publish. If a call fails or the outcome is unknown, check the source and **do not blindly retry** a potentially paid request. To disconnect one profile, remove its MCP config and environment variable; this alone does not revoke a stolen bearer. Follow the [revocation instructions](docs/install-and-verify.md#отзыв-доступа-конкретного-профиля). Before another release, use the [release checklist](docs/release-checklist.md).
+
+### Credits and disclosure
+
+This adapts the MIT-licensed [System One Connector](https://github.com/itsmostafa/system-one-connector); see [NOTICE](NOTICE) and [LICENSE](LICENSE). It uses the [Go MCP SDK](https://github.com/modelcontextprotocol/go-sdk), connects to [Hermes Agent](https://hermes-agent.nousresearch.com/docs/) and calls TypeSafe JEV via the [OpenRouter Decisions API](https://openrouter.ai/docs/guides/community/jev-tutorial). You provide and pay for your own OpenRouter access. No affiliation with, or endorsement by, those projects is implied. AI-assisted tooling was used during development and editing. Follow the rules of each data source and the rights of the people whose material you process; a technical integration does not waive them.
+
+## Links
+
+Мои ссылки / My links:
+
+- [GitHub — другие открытые проекты / other open-source projects](https://github.com/AlekseiUL)
+- [YouTube — видео об агентах и инструментах / videos about agents and tools](https://youtube.com/@alekseiulianov)
+- [Telegram SPRUT_AI — публичные заметки / public notes](https://t.me/Sprut_AI)
+- [Telegram-чат — обсуждение / discussion](https://t.me/+eH-qNIDmud8zNDZi)
+- [AI ОПЕРАЦИОНКА — платные проекты и разборы / paid projects and guides](https://t.me/tribute/app?startapp=sJyg)
