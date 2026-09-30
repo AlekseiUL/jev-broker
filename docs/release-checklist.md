@@ -5,6 +5,7 @@
 ## Разрешённый состав
 
 - `README.md`, `AGENT_GUIDE.md`, `LICENSE`, `NOTICE`, `.gitignore`, `go.mod`, `go.sum`;
+- только `.github/workflows/offline-checks.yml` для офлайн-проверок PR (без секретов и платных вызовов);
 - исходники и тесты `cmd/jev-broker/*.go`, `internal/broker/*.go`;
 - инструкции `docs/*.md` и безопасные помощники `scripts/*.py`.
 - общий Hermes-скилл `skills/jev-broker/SKILL.md`.

@@ -3,20 +3,65 @@ package broker
 import (
 	"context"
 	"errors"
+	"math"
+	"sync"
+	"time"
 )
+
+const MaxPaidRequestsPerCall = 8
+const MaxProfileRequestsPerUTCDate = 32
+
+var ErrCostLimit = errors.New("broker paid-request limit reached; no provider call was made")
+
+type profileBudget struct {
+	slot     chan struct{}
+	date     string
+	reserved int
+}
 
 type Service struct {
 	Provider Provider
 	Audit    *Audit
 	Model    string
-	paidSlot chan struct{}
+	budgetMu sync.Mutex
+	budgets  map[string]*profileBudget
 }
 
 func NewService(provider Provider, audit *Audit, model string) (*Service, error) {
 	if provider == nil || audit == nil || model == "" {
 		return nil, errors.New("broker service is incomplete")
 	}
-	return &Service{Provider: provider, Audit: audit, Model: model, paidSlot: make(chan struct{}, 1)}, nil
+	return &Service{Provider: provider, Audit: audit, Model: model, budgets: make(map[string]*profileBudget)}, nil
+}
+
+// Admission is local to this process. A reservation is never refunded: a failed
+// or canceled request may already have been billed upstream. Restarting the
+// broker resets the counter; only provider-side account limits bound dollars.
+func (s *Service) reserve(profileID string, count int) error {
+	s.budgetMu.Lock()
+	defer s.budgetMu.Unlock()
+	b := s.budgets[profileID]
+	today := time.Now().UTC().Format("2006-01-02")
+	if b.date != today {
+		b.date, b.reserved = today, 0
+	}
+	if b.reserved+count > MaxProfileRequestsPerUTCDate {
+		return ErrCostLimit
+	}
+	b.reserved += count
+	return nil
+}
+
+func (s *Service) profileSlot(profileID string) chan struct{} {
+	s.budgetMu.Lock()
+	defer s.budgetMu.Unlock()
+	if s.budgets == nil {
+		s.budgets = make(map[string]*profileBudget)
+	}
+	if s.budgets[profileID] == nil {
+		s.budgets[profileID] = &profileBudget{slot: make(chan struct{}, 1)}
+	}
+	return s.budgets[profileID].slot
 }
 
 type batchMeta struct {
@@ -38,18 +83,32 @@ func (s *Service) Evaluate(ctx context.Context, profileID string, raw []byte) ([
 	if err != nil {
 		return nil, err
 	}
+	count := 1
+	if plan.Single == nil {
+		count = len(plan.ItemIDs)
+	}
+	if count > MaxPaidRequestsPerCall {
+		return nil, ErrCostLimit
+	}
+	slot := s.profileSlot(profileID)
 	select {
-	case s.paidSlot <- struct{}{}:
-		defer func() { <-s.paidSlot }()
+	case slot <- struct{}{}:
+		defer func() { <-slot }()
 	case <-ctx.Done():
 		return nil, errors.New("broker call canceled before provider request")
+	}
+	if ctx.Err() != nil {
+		return nil, errors.New("broker call canceled before provider request")
+	}
+	if err := s.reserve(profileID, count); err != nil {
+		return nil, err
 	}
 	if plan.Single != nil {
 		result, err := s.attempt(ctx, profileID, *plan.Single, plan)
 		if err != nil {
 			return nil, err
 		}
-		return replyJSON(result), nil
+		return replyJSON(result)
 	}
 	out := struct {
 		Results map[string]Evaluation `json:"results"`
@@ -79,7 +138,8 @@ func (s *Service) Evaluate(ctx context.Context, profileID string, raw []byte) ([
 		} else {
 			totalCost += *result.Usage.Cost
 		}
-		if len(replyJSON(out)) > 16<<20 {
+		encoded, encodeErr := replyJSON(out)
+		if encodeErr != nil || len(encoded) > 16<<20 {
 			delete(out.Results, id)
 			out.Meta.Succeeded--
 			out.Meta.Failed++
@@ -93,9 +153,12 @@ func (s *Service) Evaluate(ctx context.Context, profileID string, raw []byte) ([
 	}
 	out.Meta.AllFailed = out.Meta.Succeeded == 0
 	if out.Meta.CostUnknownCount == 0 {
+		if math.IsInf(totalCost, 0) || math.IsNaN(totalCost) {
+			return nil, ErrInvalidProviderReply
+		}
 		out.Meta.CostUSD = &totalCost
 	}
-	return replyJSON(out), nil
+	return replyJSON(out)
 }
 
 func (s *Service) attempt(ctx context.Context, profileID string, request ProviderRequest, plan Plan) (Evaluation, error) {
