@@ -12,6 +12,7 @@ from pathlib import Path
 import re
 import secrets
 import sys
+import warnings
 
 
 AUDIT_HEADER = b"jev-broker-audit-v1\n"
@@ -84,8 +85,10 @@ def create_private_home(home: Path, profiles: list[str], api_key: str) -> None:
             "mcp_servers:\n"
             "  jev_broker:\n"
             '    url: "http://127.0.0.1:8768/mcp"\n'
+            "    protocol: stateless\n"
             "    headers:\n"
             f'      Authorization: "Bearer ${{{variable}}}"\n'
+            '      MCP-Protocol-Version: "2026-07-28"\n'
             "    tools:\n"
             "      include: [evaluate]\n"
         )
@@ -115,7 +118,13 @@ def main() -> int:
         parser.error("an interactive terminal is required so the API key stays hidden")
 
     os.umask(0o077)
-    api_key = getpass.getpass("OpenRouter API key (hidden input): ")
+    try:
+        # getpass otherwise falls back to echoed stdin when /dev/tty is lost.
+        with warnings.catch_warnings():
+            warnings.simplefilter("error", getpass.GetPassWarning)
+            api_key = getpass.getpass("OpenRouter API key (hidden input): ")
+    except (getpass.GetPassWarning, EOFError, OSError):
+        parser.error("hidden terminal input unavailable; setup stopped without reading the key")
     if not api_key or api_key.strip() != api_key or "\n" in api_key or "\r" in api_key:
         parser.error("API key must be nonempty, with no surrounding whitespace or line breaks")
     try:

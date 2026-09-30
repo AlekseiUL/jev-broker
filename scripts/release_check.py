@@ -108,6 +108,10 @@ def standalone_history(require: bool) -> list[str]:
         commits = git_command("rev-list", "--all").decode().splitlines()
         if require and not commits:
             failures.append("standalone repository has no commits to review")
+        # Commit subjects/bodies are published too, even when every file is clean.
+        if commits:
+            for finding in content_findings(git_command("log", "--all", "--format=%B")):
+                failures.append(f"commit messages: {finding}")
         staged = git_command("ls-files", "-z", "--cached").split(b"\x00")
         revisions = [("index", [p.decode() for p in staged if p])]
         for commit in commits:
@@ -122,6 +126,15 @@ def standalone_history(require: bool) -> list[str]:
                 data = git_command("show", ref)
                 for finding in content_findings(data):
                     failures.append(f"{revision}:{relative}: {finding}")
+        # Include loose/packed objects left behind by an amend. They are not
+        # normally sent by `git push`, but should not be kept in a release clone.
+        objects = git_command("cat-file", "--batch-all-objects", "--batch-check=%(objectname) %(objecttype)")
+        for line in objects.decode("ascii").splitlines():
+            oid, kind = line.split(" ", 1)
+            if kind != "blob":
+                continue
+            for finding in content_findings(git_command("cat-file", "blob", oid)):
+                failures.append(f"git object {oid[:12]}: {finding}")
     except (OSError, UnicodeDecodeError, subprocess.CalledProcessError) as exc:
         failures.append(f"git history scan failed: {type(exc).__name__}")
     return failures

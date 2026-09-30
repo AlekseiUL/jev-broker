@@ -4,11 +4,13 @@ from __future__ import annotations
 
 from contextlib import redirect_stderr, redirect_stdout
 import io
+import json
 import os
 from pathlib import Path
 import tempfile
 import unittest
 from unittest.mock import patch
+from typing import cast
 
 import run as broker_run
 import setup as broker_setup
@@ -56,15 +58,26 @@ class RunTests(unittest.TestCase):
 
             with patch.object(broker_run, "PACKAGE_ROOT", Path(root)), patch(
                 "sys.argv", ["run.py", "--home", str(home)]
-            ), patch.dict(os.environ, {"UNRELATED_SECRET": "FAKE-NO-INHERIT"}), patch.object(
+            ), patch.dict(os.environ, {"UNRELATED_SECRET": "FAKE-NO-INHERIT", "JEV_BROKER_MODEL": "synthetic-model"}), patch.object(
                 broker_run.os, "execve", side_effect=fake_exec
             ):
                 self.assertEqual(broker_run.main(), 1)
             self.assertEqual(captured["path"], binary)
-            env = captured["env"]
-            self.assertIsInstance(env, dict)
+            env = cast(dict[str, str], captured["env"])
             self.assertEqual(env["OPENROUTER_API_KEY"], "FAKE-KEY-NOT-REAL")
             self.assertNotIn("UNRELATED_SECRET", env)
+            self.assertEqual(env["JEV_BROKER_MODEL"], "synthetic-model")
+
+    def test_preflight_rejects_invalid_registry_before_exec(self) -> None:
+        with tempfile.TemporaryDirectory() as root:
+            home, _ = self.make_install(root)
+            clients = home / "clients.json"
+            clients.write_text(json.dumps({"profiles": [{"id": "invalid id", "token_sha256": "0" * 64}]}))
+            self.assertRaises(ValueError, broker_run.checked_config, home)
+            clients.write_text(json.dumps({"profiles": [{"id": "assistant", "token_sha256": "0" * 64}] * 65}))
+            self.assertRaises(ValueError, broker_run.checked_config, home)
+            clients.write_text('{"profiles":[],"profiles":[]}')
+            self.assertRaises(ValueError, broker_run.checked_config, home)
 
 
 if __name__ == "__main__":

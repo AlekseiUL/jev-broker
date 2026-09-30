@@ -10,8 +10,8 @@ This is a **standalone public version of the workflow**, not a copy of a live mu
 
 ### Requirements and costs
 
-- macOS or Linux; Go 1.25+, Python 3.9+, and Hermes with HTTP MCP support. Windows is not supported by this release.
-- Your **own** OpenRouter account and normal API key. The model call is paid; setup, local tests and MCP `tools/list` are not. There is no built-in daily spending cap.
+- macOS or Linux; Go 1.25+, Python 3.9+, and Hermes with stateless MCP 2026-07-28 (`server/discover`) support. Older HTTP MCP clients are rejected before paid calls. Windows is not supported by this release.
+- Your **own** OpenRouter account and normal API key. The model call is paid; setup, local tests and MCP `tools/list` are not. The broker allows up to 8 paid requests per call and reserves up to 32 requests per profile per UTC day **in memory**. Restarting it resets that counter. This is not a monetary cap; set an account limit with the provider.
 - Run the broker on the same machine as your trusted Hermes profiles. The launcher binds only to `127.0.0.1`. It does not install a background service or configure remote TLS.
 - Without `items`, one `evaluate` call makes one paid provider request. With `items`, **each item makes its own sequential paid request** using the same questions. Provider requests are not retried automatically. A timeout or partial response does not prove that no charge occurred.
 
@@ -45,7 +45,7 @@ Reload that profile's MCP connection (or start a new session) and verify its **a
 
 Do not put the OpenRouter key in chats, commands, Git or Hermes profile YAML. Never send credentials, session files or other people's private material to JEV without the necessary rights. The broker's credential check is **best-effort**, not a guarantee. File permissions (`0700/0600`) isolate files from other OS users, **not** from agents with shell/file access under the same OS account. Untrusted profiles require separate OS users or machines with an independently secured connection.
 
-The broker does not impose a monetary budget or decide which data is safe to share. A JEV probability is not a fact, permission or approval to publish. If a call fails or the outcome is unknown, check the source and **do not blindly retry** a potentially paid request. To disconnect one profile, remove its MCP config and environment variable; this alone does not revoke a stolen bearer. Follow the [revocation instructions](docs/install-and-verify.md#отзыв-доступа-конкретного-профиля). Before another release, use the [release checklist](docs/release-checklist.md).
+The broker does not impose a monetary budget or decide which data is safe to share. It writes a private audit log of attempt time, profile ID, event, modes and known cost. Unknown or failed calls may still have been charged. With `items`, shared `state` is sent again for each item; the aggregate outbound request JSON is limited to 4 MiB. A JEV probability is not a fact, permission or approval to publish. If a call fails or the outcome is unknown, check the source and **do not blindly retry** a potentially paid request. To disconnect one profile, remove its MCP config and environment variable; this alone does not revoke a stolen bearer. Follow the [revocation instructions](docs/install-and-verify.md#отзыв-доступа-конкретного-профиля). Before another release, use the [release checklist](docs/release-checklist.md).
 
 ### Credits and disclosure
 
@@ -61,11 +61,11 @@ This adapts the MIT-licensed [System One Connector](https://github.com/itsmostaf
 
 ## Что понадобится
 
-- **macOS или Linux** (Windows этим выпуском не поддерживается), Go **1.25+**, Python **3.9+**, Hermes с поддержкой HTTP MCP.
+- **macOS или Linux** (Windows этим выпуском не поддерживается), Go **1.25+**, Python **3.9+**, Hermes с поддержкой stateless MCP 2026-07-28 (`server/discover`); старый HTTP MCP получает отказ до платного вызова.
 - Собственный аккаунт OpenRouter и обычный API-ключ, созданный на [странице ключей OpenRouter](https://openrouter.ai/settings/keys). Management API key здесь не нужен.
 - Компьютер, где работают Broker и профили Hermes. Этот вариант слушает только `127.0.0.1`; для агентов на других машинах понадобится отдельная защищённая сетевая архитектура, которой этот пакет не настраивает.
 
-Ключ OpenRouter вводится только в скрытый интерактивный запрос `setup.py`. Не передавайте его агенту в чате, не вставляйте в команду терминала, `config.yaml`, Git или Telegram. Настройка не делает платных вызовов и не создаёт жёсткий дневной денежный лимит. Владелец ключа при желании может установить собственный лимит у OpenRouter.
+Ключ OpenRouter вводится только в скрытый интерактивный запрос `setup.py`. Не передавайте его агенту в чате, не вставляйте в команду терминала, `config.yaml`, Git или Telegram. Настройка не делает платных вызовов. Вызов ограничен 8 платными запросами, профиль — 32 зарезервированными запросами за день UTC, **пока сервер работает**. Перезапуск обнуляет счётчик: это не денежный лимит. Владелец ключа может установить лимит у OpenRouter.
 
 **Граница защиты:** права файлов `0700/0600` закрывают их от других пользователей ОС, но не от агентов, которым доступна произвольная оболочка или чтение файлов **под тем же системным пользователем**. Такие агенты могут прочитать ключ Broker и токены соседних профилей. Если профили не доверены или имеют свободный доступ к shell/filesystem, не считайте эту установку изоляцией секретов: запускайте Broker и профили под разными пользователями ОС (либо на разных машинах с отдельно защищённым соединением) и передавайте каждому только его токен. Инструкция ниже рассчитана на доверенные профили одного пользователя; разграничение на уровне MCP не заменяет изоляцию ОС.
 
@@ -103,7 +103,7 @@ python3 scripts/run.py
    python3 scripts/install_profile_env.py --profile assistant --env-file "$HOME/.hermes/profiles/assistant/.env"
    ```
 
-   Для другого профиля замените `assistant` и путь к его `.env`; перед запуском сверьте путь с выводом `hermes --profile ИМЯ config env-path`. Скрипт сохраняет приватную резервную копию существующего файла, не переписывает чужие переменные и откажется менять уже существующий токен с тем же именем. Исходный фрагмент остаётся в приватной папке Broker.
+   Для другого профиля замените `assistant` и путь к его `.env`; скрипт сам сверит этот путь с `hermes --profile ИМЯ config env-path` и откажется писать по иному адресу. При изменении существующего `.env` резервная копия остаётся **рядом с ним** и содержит прежние секреты; если токен уже совпадает, новая копия не создаётся. Сохраняйте и отзывайте эти копии как секретные файлы. Исходный фрагмент остаётся в приватной папке Broker.
 
 2. Узнайте путь к `config.yaml` того же профиля через `hermes --profile assistant config path` и добавьте блок `jev_broker` из приватного `mcp-assistant.yaml`. Если `mcp_servers:` уже есть, добавляйте только вложенный `jev_broker`, не создавайте второй верхнеуровневый ключ. Пример без секрета:
 
@@ -111,15 +111,17 @@ python3 scripts/run.py
    mcp_servers:
      jev_broker:
        url: "http://127.0.0.1:8768/mcp"
+       protocol: stateless
        headers:
          Authorization: "Bearer ${JEV_BROKER_TOKEN_ASSISTANT}"
+         MCP-Protocol-Version: "2026-07-28"
        tools:
          include: [evaluate]
    ```
 
    Название переменной для другого профиля записано в его `mcp-<profile>.yaml`. Сам токен в YAML **не** вставляйте. Перед правкой сохраните приватную резервную копию `config.yaml`. Это ручной шаг: установщик не трогает работающий Hermes.
 
-Hermes [поддерживает HTTP MCP, `headers`, `tools.include` и подстановку `${VAR}` из секретного окружения профиля](https://hermes-agent.nousresearch.com/docs/user-guide/features/mcp). Запустите новый сеанс Hermes или используйте `/reload-mcp` в нужном сеансе. Проверьте реальный список инструментов: должен появиться **`mcp__jev_broker__evaluate`** (или эквивалентное имя, которое показывает ваша версия Hermes) со входами `state`, `items`, `questions`. Проверка `tools/list` не отправляет запрос в OpenRouter и ничего не стоит. Если инструмент не виден, не начинайте платный тест — см. [диагностику](docs/install-and-verify.md).
+Hermes [поддерживает HTTP MCP, `headers`, `tools.include` и подстановку `${VAR}` из секретного окружения профиля](https://hermes-agent.nousresearch.com/docs/user-guide/features/mcp). Нужны **оба** поля протокола из примера выше: без них старый handshake не сможет запустить защищённый от осиротевших платных вызовов Broker. Запустите новый сеанс Hermes или используйте `/reload-mcp` в нужном сеансе. Проверьте реальный список инструментов: должен появиться **`mcp__jev_broker__evaluate`** (или эквивалентное имя, которое показывает ваша версия Hermes) со входами `state`, `items`, `questions`. Проверка `tools/list` не отправляет запрос в OpenRouter и ничего не стоит. Если инструмент не виден, не начинайте платный тест — см. [диагностику](docs/install-and-verify.md).
 
 Только после успешного `tools/list` **отдельно** разрешите один синтетический живой вызов по примеру из [гайда агенту](AGENT_GUIDE.md). Он уже платный. Никакой вызов к модели не запускается автоматически при установке.
 
