@@ -15,6 +15,11 @@ def git(root: Path, *args: str, data: bytes | None = None) -> bytes:
 
 
 class ReleaseHistoryTests(unittest.TestCase):
+    def test_only_offline_workflow_is_public(self) -> None:
+        self.assertTrue(gate.allowed_path(".github/workflows/offline-checks.yml"))
+        self.assertFalse(gate.allowed_path(".github/workflows/other.yml"))
+        self.assertFalse(gate.allowed_path(".github/workflows/../secrets.yml"))
+
     def make_repo(self, root: Path) -> None:
         git(root, "init", "-q", "-b", "main")
         (root / "README.md").write_text("public synthetic example\n")

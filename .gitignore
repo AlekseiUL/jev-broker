@@ -8,6 +8,9 @@
 !/README.md
 !/go.mod
 !/go.sum
+!/.github/
+!/.github/workflows/
+!/.github/workflows/offline-checks.yml
 !/cmd/
 !/cmd/jev-broker/
 !/cmd/jev-broker/*.go
