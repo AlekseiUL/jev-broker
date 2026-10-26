@@ -3,15 +3,27 @@
 from __future__ import annotations
 
 import hashlib
+import getpass
+import io
 import json
 from pathlib import Path
 import tempfile
 import unittest
+from unittest.mock import patch
+from contextlib import redirect_stderr
+import warnings
 
 import setup as broker_setup
 
 
 class SetupTests(unittest.TestCase):
+    def test_snippet_requires_cancellable_stateless_protocol(self) -> None:
+        with tempfile.TemporaryDirectory() as root:
+            home = Path(root) / "private"
+            broker_setup.create_private_home(home, ["assistant"], "FAKE-KEY-NOT-REAL")
+            snippet = (home / "mcp-assistant.yaml").read_text()
+            self.assertIn("protocol: stateless", snippet)
+            self.assertIn('MCP-Protocol-Version: "2026-07-28"', snippet)
     def test_private_files_and_distinct_profile_tokens(self) -> None:
         with tempfile.TemporaryDirectory() as root:
             home = Path(root) / "jev-broker"
@@ -50,6 +62,23 @@ class SetupTests(unittest.TestCase):
         self.assertFalse(broker_setup.valid_profiles(["-bad"]))
         self.assertFalse(broker_setup.valid_profiles(["BadCaps"]))
         self.assertFalse(broker_setup.valid_profiles(["with_underbar"]))
+
+    def test_getpass_echo_fallback_is_fatal_before_reading(self) -> None:
+        with tempfile.TemporaryDirectory() as root:
+            home = Path(root) / "new-broker"
+            stderr = io.StringIO()
+            def no_tty(_prompt: str) -> str:
+                warnings.warn("cannot hide input", getpass.GetPassWarning)
+                self.fail("getpass must not read the key when echo cannot be disabled")
+            with patch.object(broker_setup.sys, "stdin") as stdin, patch.object(
+                broker_setup.getpass, "getpass", side_effect=no_tty
+            ), patch("sys.argv", ["setup.py", "--home", str(home), "--profile", "assistant"]), redirect_stderr(stderr):
+                stdin.isatty.return_value = True
+                with self.assertRaises(SystemExit) as failure:
+                    broker_setup.main()
+            self.assertEqual(failure.exception.code, 2)
+            self.assertFalse(home.exists())
+            self.assertNotIn("FAKE-TEST-KEY", stderr.getvalue())
 
 
 if __name__ == "__main__":

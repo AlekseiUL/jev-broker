@@ -8,17 +8,35 @@ import os
 from pathlib import Path
 import secrets
 import stat
+import subprocess
 import sys
 
 import run as broker_run
 import setup as broker_setup
 
 
+def profile_env_path(profile: str) -> Path:
+    """Use Hermes's own profile resolver, not a guessed ~/.hermes layout."""
+    try:
+        result = subprocess.run(
+            ["hermes", "--profile", profile, "config", "env-path"],
+            check=True, capture_output=True, text=True, timeout=15,
+        )
+    except (OSError, subprocess.SubprocessError) as exc:
+        raise ValueError("could not determine this Hermes profile's .env path") from exc
+    path = Path(result.stdout.strip())
+    if not path.is_absolute() or path.name != ".env":
+        raise ValueError("Hermes returned an invalid profile .env path")
+    return path
+
+
 def install(profile: str, home: Path, env_file: Path) -> str:
     if not broker_setup.PROFILE_ID.fullmatch(profile):
         raise ValueError("invalid profile ID")
-    if not env_file.is_absolute() or not env_file.parent.is_dir():
+    if not env_file.is_absolute() or not env_file.parent.is_dir() or env_file.is_symlink():
         raise ValueError("--env-file must be an absolute path in an existing Hermes directory")
+    if env_file != profile_env_path(profile):
+        raise ValueError("--env-file differs from Hermes's path for this profile; no file was changed")
     try:
         env_file.resolve().relative_to(broker_run.PACKAGE_ROOT)
     except ValueError:
@@ -43,7 +61,7 @@ def install(profile: str, home: Path, env_file: Path) -> str:
                 if line == fragment.rstrip(b"\n"):
                     return "already-installed"
                 raise ValueError("the profile already has a different Broker bearer; no overwrite")
-        backup = home / f"hermes-env-backup-{secrets.token_hex(8)}"
+        backup = env_file.parent / f".env.jev-broker-backup-{secrets.token_hex(8)}"
         broker_setup.write_private(backup, old)
         backup_message = f"Backup saved privately at {backup}."
     else:
@@ -51,8 +69,15 @@ def install(profile: str, home: Path, env_file: Path) -> str:
 
     new_content = old + (b"\n" if old and not old.endswith(b"\n") else b"") + fragment
     temporary = env_file.parent / f".jev-broker-env-{secrets.token_hex(8)}"
-    broker_setup.write_private(temporary, new_content)
-    os.replace(temporary, env_file)
+    try:
+        broker_setup.write_private(temporary, new_content)
+        info = temporary.stat()
+        if not stat.S_ISREG(info.st_mode) or info.st_mode & 0o077:
+            raise ValueError("temporary Hermes .env failed its private-file check")
+        os.replace(temporary, env_file)
+    finally:
+        if temporary.exists() and temporary.is_file():
+            temporary.unlink()
     info = env_file.stat()
     if not stat.S_ISREG(info.st_mode) or info.st_mode & 0o077:
         raise ValueError("Hermes .env failed its private-file check")

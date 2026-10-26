@@ -11,17 +11,18 @@ import (
 )
 
 const (
-	MaxInputBytes  = 1 << 20
-	MaxItems       = 500
-	MaxQuestions   = 64
-	maxChoices     = 255
-	maxScoreLevels = 10
+	MaxInputBytes    = 1 << 20
+	MaxItems         = MaxPaidRequestsPerCall
+	MaxQuestions     = 64
+	MaxOutboundBytes = 4 << 20
+	maxChoices       = 255
+	maxScoreLevels   = 10
 )
 
 var (
 	questionIDPattern = regexp.MustCompile(`^[A-Za-z][A-Za-z0-9_-]{0,63}$`)
 	itemIDPattern     = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9_.:-]{0,127}$`)
-	credentialPattern = regexp.MustCompile(`(?i)(-----BEGIN [A-Z ]*PRIVATE KEY-----|\bBearer[ \t]+[A-Za-z0-9._~+/-]{12,}|\b(?:sk-(?:proj-|or-v1-)?|ghp_|gho_|github_pat_|xox[baprs]-|AIza|AKIA|ASIA)[A-Za-z0-9_-]{12,}|(?:api[_ -]?key|access[_ -]?token|refresh[_ -]?token|password|passwd|client[_ -]?secret|private[_ -]?key|session[_ -]?(?:id|cookie|token)?)["']?\s*[:=]\s*["']?[^\s"'&,;]{4,})`)
+	credentialPattern = regexp.MustCompile(`(?i)(-----BEGIN [A-Z ]*PRIVATE KEY-----|\bBearer[ 	]+[A-Za-z0-9._~+/-]{12,}|\b(?:sk-(?:proj-|or-v1-)?|ghp_|gho_|github_pat_|xox[baprs]-|AIza|AKIA|ASIA|hf_|gta_|glpat-)[A-Za-z0-9_-]{12,}|\beyJ[A-Za-z0-9_-]{12,}\.[A-Za-z0-9_-]{12,}\.[A-Za-z0-9_-]{12,}\b|\b[0-9]{8,10}:[A-Za-z0-9_-]{30,}\b|\b(?:postgres(?:ql)?|mysql|mongodb(?:\+srv)?|redis)://[^\s/@:]+:[^\s/@]+@|(?:api[_ -]?key|access[_ -]?token|refresh[_ -]?token|password|passwd|client[_ -]?secret|private[_ -]?key|session[_ -]?(?:id|cookie|token)?|пароль)["']?\s*[:=]\s*["']?[^\s"'&,;]{4,})`)
 )
 
 type Input struct {
@@ -84,8 +85,11 @@ func PlanInput(raw []byte, model string) (Plan, error) {
 		if !validContent(in.State) {
 			return Plan{}, ErrInvalidInput
 		}
-	} else if len(in.Items) == 0 || len(in.Items) > MaxItems || len(in.State) > 0 && !validContent(in.State) {
+	} else if len(in.Items) == 0 || len(in.State) > 0 && !validContent(in.State) {
 		return Plan{}, ErrInvalidInput
+	}
+	if len(in.Items) > MaxItems {
+		return Plan{}, ErrCostLimit
 	}
 	plan := Plan{Questions: in.Questions, ProviderQuestions: map[string]providerQuestion{}, Modes: map[string]int{"noul": 0, "choice": 0, "score": 0}}
 	for id, q := range in.Questions {
@@ -128,6 +132,7 @@ func PlanInput(raw []byte, model string) (Plan, error) {
 		return plan, nil
 	}
 	plan.Items = map[string]ProviderRequest{}
+	outboundBytes := 0
 	for id, item := range in.Items {
 		if !itemIDPattern.MatchString(id) || !validContent(item) {
 			return Plan{}, ErrInvalidInput
@@ -137,7 +142,13 @@ func PlanInput(raw []byte, model string) (Plan, error) {
 			state["context"] = in.State
 		}
 		stateJSON, _ := json.Marshal(state)
-		plan.Items[id] = ProviderRequest{State: stateJSON, Questions: plan.ProviderQuestions, Model: model}
+		request := ProviderRequest{State: stateJSON, Questions: plan.ProviderQuestions, Model: model}
+		encoded, err := json.Marshal(request)
+		if err != nil || len(encoded) > MaxOutboundBytes-outboundBytes {
+			return Plan{}, ErrInvalidInput
+		}
+		outboundBytes += len(encoded)
+		plan.Items[id] = request
 		plan.ItemIDs = append(plan.ItemIDs, id)
 	}
 	sort.Strings(plan.ItemIDs)
@@ -217,8 +228,13 @@ func hasCredential(value any) bool {
 		for key, item := range v {
 			name := strings.ToLower(key)
 			name = strings.NewReplacer("_", "", "-", "", " ", "").Replace(name)
-			switch name {
-			case "apikey", "accesstoken", "refreshtoken", "password", "passwd", "clientsecret", "privatekey", "sessionid", "sessioncookie", "sessiontoken", "bearer":
+			switch {
+			case strings.Contains(name, "token"), strings.Contains(name, "secret"),
+				strings.Contains(name, "password"), strings.Contains(name, "passwd"),
+				strings.Contains(name, "credential"), strings.Contains(name, "apikey"),
+				strings.Contains(name, "privatekey"), strings.Contains(name, "accesskey"),
+				strings.Contains(name, "sessionid"), strings.Contains(name, "sessioncookie"),
+				name == "bearer", strings.Contains(name, "пароль"):
 				return true
 			}
 			if hasCredential(item) {
@@ -255,7 +271,7 @@ func ToolSchema() map[string]any {
 		"type": "object",
 		"properties": map[string]any{
 			"state":     map[string]any{"description": "Evidence/context as nonempty text, object or array; optional with items"},
-			"items":     map[string]any{"type": "object", "minProperties": 1, "maxProperties": MaxItems, "description": "Optional named records; each is a separate paid request"},
+			"items":     map[string]any{"type": "object", "minProperties": 1, "maxProperties": MaxPaidRequestsPerCall, "description": "Optional named records; each is a separate paid request"},
 			"questions": map[string]any{"type": "object", "minProperties": 1, "maxProperties": MaxQuestions, "additionalProperties": question},
 		},
 		"required":             []string{"questions"},

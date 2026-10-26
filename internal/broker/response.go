@@ -165,12 +165,12 @@ func sameDescription(got, want json.RawMessage) bool {
 	return reflect.DeepEqual(actual, expected)
 }
 
-func replyJSON(v any) []byte {
+func replyJSON(v any) ([]byte, error) {
 	var buffer bytes.Buffer
 	encoder := json.NewEncoder(&buffer)
 	encoder.SetEscapeHTML(false)
-	if encoder.Encode(v) != nil {
-		return []byte(`{"error":"response encoding failed"}`)
+	if err := encoder.Encode(v); err != nil {
+		return nil, errors.New("response encoding failed after provider call; do not retry")
 	}
-	return bytes.TrimSpace(buffer.Bytes())
+	return bytes.TrimSpace(buffer.Bytes()), nil
 }

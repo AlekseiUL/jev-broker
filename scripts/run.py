@@ -14,6 +14,31 @@ import sys
 
 AUDIT_HEADER = b"jev-broker-audit-v1\n"
 PACKAGE_ROOT = Path(__file__).resolve().parent.parent
+PROFILE_ID = re.compile(r"^[A-Za-z][A-Za-z0-9_-]{0,63}$")
+
+def unique_object(pairs: list[tuple[str, object]]) -> dict[str, object]:
+    obj: dict[str, object] = {}
+    for key, value in pairs:
+        if key in obj:
+            raise ValueError("duplicate key in clients.json")
+        obj[key] = value
+    return obj
+
+def validate_clients(clients: object) -> None:
+    if not isinstance(clients, dict) or set(clients) != {"profiles"} or not isinstance(clients["profiles"], list) or not 1 <= len(clients["profiles"]) <= 64:
+        raise ValueError("clients.json has no valid profiles")
+    ids: set[str] = set()
+    digests: set[str] = set()
+    for entry in clients["profiles"]:
+        if not isinstance(entry, dict) or set(entry) != {"id", "token_sha256"}:
+            raise ValueError("invalid clients.json profile")
+        name, digest = entry["id"], entry["token_sha256"]
+        if not isinstance(name, str) or not PROFILE_ID.fullmatch(name) or name in ids:
+            raise ValueError("invalid or duplicate clients.json profile ID")
+        if not isinstance(digest, str) or not re.fullmatch(r"[0-9a-f]{64}", digest) or digest in digests:
+            raise ValueError("invalid or duplicate clients.json token digest")
+        ids.add(name)
+        digests.add(digest)
 
 
 def default_home() -> Path:
@@ -57,9 +82,8 @@ def checked_config(home: Path) -> str:
         raise ValueError("openrouter.key must be ASCII") from exc
 
     raw_clients = read_private_file(home / "clients.json", 65536, exact_mode=True)
-    clients = json.loads(raw_clients)
-    if not isinstance(clients, dict) or not isinstance(clients.get("profiles"), list) or not clients["profiles"]:
-        raise ValueError("clients.json has no profiles")
+    clients = json.loads(raw_clients, object_pairs_hook=unique_object)
+    validate_clients(clients)
     # Read only the prefix; an audit file can grow without affecting startup.
     flags = os.O_RDONLY | getattr(os, "O_NOFOLLOW", 0)
     audit_fd = os.open(home / "audit.log", flags)
@@ -107,6 +131,8 @@ def main() -> int:
         "JEV_BROKER_AUDIT_FILE": str(home / "audit.log"),
         "JEV_BROKER_ADDR": address,
     }
+    if "JEV_BROKER_MODEL" in os.environ:
+        env["JEV_BROKER_MODEL"] = os.environ["JEV_BROKER_MODEL"]
     binary = PACKAGE_ROOT / "bin" / "jev-broker"
     os.execve(binary, [str(binary), "serve"], env)
     return 1

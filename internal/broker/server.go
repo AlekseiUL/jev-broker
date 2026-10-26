@@ -33,7 +33,9 @@ func Handler(registry Registry, service *Service) http.Handler {
 			return &mcp.CallToolResult{Content: []mcp.Content{&mcp.TextContent{Text: string(result)}}}, nil, nil
 		})
 		perProfile[id] = mcp.NewStreamableHTTPHandler(func(*http.Request) *mcp.Server { return server }, &mcp.StreamableHTTPOptions{
-			MaxRequestBodyBytes: MaxInputBytes + 64<<10,
+			MaxRequestBodyBytes:          MaxInputBytes + 64<<10,
+			Stateless:                    true,
+			PropagateRequestCancellation: true,
 		})
 	}
 	authenticated := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -45,6 +47,13 @@ func Handler(registry Registry, service *Service) http.Handler {
 		caller := registry.Authenticate(r.Header.Get("Authorization"))
 		if caller == nil {
 			http.Error(w, "unauthorized", http.StatusUnauthorized)
+			return
+		}
+		// SDK v1.7 only ties a provider handler to the POST context for the
+		// >= 2026-07-28 protocol on a stateless transport. Reject older
+		// clients before any tool can trigger an unbounded orphaned call.
+		if r.Method != http.MethodPost || r.Header.Get("Mcp-Protocol-Version") != "2026-07-28" {
+			http.Error(w, "MCP protocol 2026-07-28 required", http.StatusBadRequest)
 			return
 		}
 		perProfile[caller.ID].ServeHTTP(w, r)

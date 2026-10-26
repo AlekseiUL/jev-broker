@@ -108,7 +108,8 @@ func TestValidateReplyTypedAndSanitized(t *testing.T) {
 	if err != nil || len(reply.Answers) != 3 {
 		t.Fatalf("valid reply failed: %v", err)
 	}
-	if bytes.Contains(replyJSON(reply), []byte("provider-echo-must-not-return")) {
+	encoded, err := replyJSON(reply)
+	if err != nil || bytes.Contains(encoded, []byte("provider-echo-must-not-return")) {
 		t.Fatal("provider echo survived response shaping")
 	}
 	for _, bad := range []string{
