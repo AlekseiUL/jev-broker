@@ -24,3 +24,10 @@
 !/skills/
 !/skills/jev-broker/
 !/skills/jev-broker/SKILL.md
+
+# Reviewed dependency maintenance inputs and gates.
+!/.github/dependabot.yml
+!/.github/DEPENDENCIES.md
+!/.github/workflows/dependency-audit.yml
+!/requirements-ci.in
+!/requirements-audit.txt
