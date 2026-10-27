@@ -10,7 +10,7 @@ This is a **standalone public version of the workflow**, not a copy of a live mu
 
 ### Requirements and costs
 
-- macOS or Linux; Go 1.25+, Python 3.9+, and Hermes with stateless MCP 2026-07-28 (`server/discover`) support. Older HTTP MCP clients are rejected before paid calls. Windows is not supported by this release.
+- macOS or Linux; Go 1.26.10+, Python 3.9+, and Hermes with stateless MCP 2026-07-28 (`server/discover`) support. Older HTTP MCP clients are rejected before paid calls. Windows is not supported by this release.
 - Your **own** OpenRouter account and normal API key. The model call is paid; setup, local tests and MCP `tools/list` are not. The broker allows up to 8 paid requests per call and reserves up to 32 requests per profile per UTC day **in memory**. Restarting it resets that counter. This is not a monetary cap; set an account limit with the provider.
 - Run the broker on the same machine as your trusted Hermes profiles. The launcher binds only to `127.0.0.1`. It does not install a background service or configure remote TLS.
 - Without `items`, one `evaluate` call makes one paid provider request. With `items`, **each item makes its own sequential paid request** using the same questions. Provider requests are not retried automatically. A timeout or partial response does not prove that no charge occurred.
@@ -61,7 +61,7 @@ This adapts the MIT-licensed [System One Connector](https://github.com/itsmostaf
 
 ## Что понадобится
 
-- **macOS или Linux** (Windows этим выпуском не поддерживается), Go **1.25+**, Python **3.9+**, Hermes с поддержкой stateless MCP 2026-07-28 (`server/discover`); старый HTTP MCP получает отказ до платного вызова.
+- **macOS или Linux** (Windows этим выпуском не поддерживается), Go **1.26.10+**, Python **3.9+**, Hermes с поддержкой stateless MCP 2026-07-28 (`server/discover`); старый HTTP MCP получает отказ до платного вызова.
 - Собственный аккаунт OpenRouter и обычный API-ключ, созданный на [странице ключей OpenRouter](https://openrouter.ai/settings/keys). Management API key здесь не нужен.
 - Компьютер, где работают Broker и профили Hermes. Этот вариант слушает только `127.0.0.1`; для агентов на других машинах понадобится отдельная защищённая сетевая архитектура, которой этот пакет не настраивает.
 

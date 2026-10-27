@@ -35,7 +35,11 @@ PATTERNS = {
 
 def allowed_path(relative: str) -> bool:
     path = Path(relative)
-    if relative == ".github/workflows/offline-checks.yml":
+    if relative in {
+        ".github/workflows/offline-checks.yml", ".github/workflows/dependency-audit.yml",
+        ".github/dependabot.yml", ".github/DEPENDENCIES.md",
+        "requirements-ci.in", "requirements-audit.txt",
+    }:
         return True
     if path.is_absolute() or ".." in path.parts or any(part.startswith(".") for part in path.parts[1:]):
         return False

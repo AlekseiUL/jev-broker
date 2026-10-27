@@ -15,8 +15,11 @@ def git(root: Path, *args: str, data: bytes | None = None) -> bytes:
 
 
 class ReleaseHistoryTests(unittest.TestCase):
-    def test_only_offline_workflow_is_public(self) -> None:
+    def test_only_reviewed_maintenance_files_are_public(self) -> None:
         self.assertTrue(gate.allowed_path(".github/workflows/offline-checks.yml"))
+        for name in (".github/workflows/dependency-audit.yml", ".github/dependabot.yml",
+                     ".github/DEPENDENCIES.md", "requirements-ci.in", "requirements-audit.txt"):
+            self.assertTrue(gate.allowed_path(name), name)
         self.assertFalse(gate.allowed_path(".github/workflows/other.yml"))
         self.assertFalse(gate.allowed_path(".github/workflows/../secrets.yml"))
 

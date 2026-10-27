@@ -1,6 +1,6 @@
 module jevbroker
 
-go 1.25.0
+go 1.26.10
 
 require github.com/modelcontextprotocol/go-sdk v1.7.0
 
