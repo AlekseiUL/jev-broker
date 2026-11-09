@@ -1,2 +1,4 @@
 # Offline MCP protocol compatibility tests.
 mcp==2.2.0
+# Security regression baseline; keep the matching core in the resolved snapshot.
+pydantic==2.14.2
