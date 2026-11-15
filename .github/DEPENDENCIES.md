@@ -11,3 +11,5 @@ For this repository, regenerate with `uv pip compile --python-version 3.12 --no-
 Pydantic 2.14.2 and its exact pydantic-core 2.50.2 dependency address GHSA-qpmf-fgh3-ff25 and GHSA-3r8g-cqwr-jr29. Synthetic negative and positive controls live in `scripts/test_pydantic_security.py`. Pydantic is an offline Python MCP compatibility-test dependency, not part of the Go broker runtime; these tests do not establish an exploitable broker path or attest a user's installed MCP environment.
 
 OpenTelemetry API 1.45.2 fixes GHSA-mf5v-w3w3-f6cg (trace-context parsing denial of service). Keep the resolved compatibility-test snapshot on this version or a reviewed patched successor. This Python dependency is used by offline MCP compatibility tests, not the Go broker runtime; a patched snapshot does not upgrade existing user environments.
+
+The Go minimum is 1.26.11 to address GO-2026-6859 in net/http. CI reads the toolchain baseline from go.mod. Rebuild existing binaries with a patched toolchain; changing go.mod alone does not patch a running binary.
